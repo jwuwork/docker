@@ -9,22 +9,25 @@ issues associated with it. If necessary, links are provided to additional
 documentation on an issue.  As an active Docker user and community member,
 please feel free to provide any feedback on these features you wish.
 
-## Install Docker experimental 
+## Install Docker experimental
 
-Unlike the regular Docker binary, the experimental channels is built and updated nightly on TO.BE.ANNOUNCED. From one day to the next, new features may appear, while existing experimental features may be refined or entirely removed.
+Unlike the regular Docker binary, the experimental channels is built and
+updated nightly on https://experimental.docker.com. From one day to the
+next, new features may appear, while existing experimental features may be
+refined or entirely removed.
 
-1. Verify that you have `wget` installed.
+1. Verify that you have `curl` installed.
 
-        $ which wget
+        $ which curl
 
-    If `wget` isn't installed, install it after updating your manager:
+    If `curl` isn't installed, install it after updating your manager:
 
         $ sudo apt-get update
-        $ sudo apt-get install wget
+        $ sudo apt-get install curl
 
 2. Get the latest Docker package.
 
-        $ wget -qO- https://experimental.docker.com/ | sh
+        $ curl -sSL https://experimental.docker.com/ | sh
 
     The system prompts you for your `sudo` password. Then, it downloads and
     installs Docker and its dependencies.
@@ -34,7 +37,7 @@ Unlike the regular Docker binary, the experimental channels is built and updated
 	>command fails for the Docker repo during installation. To work around this,
 	>add the key directly using the following:
 	>
-	>       $ wget -qO- https://experimental.docker.com/gpg | sudo apt-key add -
+	>       $ curl -sSL https://experimental.docker.com/gpg | sudo apt-key add -
 
 3. Verify `docker` is installed correctly.
 
@@ -42,10 +45,36 @@ Unlike the regular Docker binary, the experimental channels is built and updated
 
     This command downloads a test image and runs it in a container.
 
+### Get the Linux binary
+To download the latest experimental `docker` binary for Linux,
+use the following URLs:
+
+    https://experimental.docker.com/builds/Linux/i386/docker-latest
+
+    https://experimental.docker.com/builds/Linux/x86_64/docker-latest
+
+After downloading the appropriate binary, you can follow the instructions
+[here](https://docs.docker.com/installation/binaries/#get-the-docker-binary) to run the `docker` daemon.
+
+> **Note**
+>
+> 1) You can get the MD5 and SHA256 hashes by appending .md5 and .sha256 to the URLs respectively
+>
+> 2) You can get the compressed binaries by appending .tgz to the URLs
+
+### Build an experimental binary
+You can also build the experimental binary from the standard development environment by adding
+`DOCKER_EXPERIMENTAL=1` to the environment where you run `make` to build Docker binaries. For example,
+to build a dynamically-linked Docker binary with the experimental features enabled:
+
+        $ DOCKER_EXPERIMENTAL=1 make dynbinary
+
 ## Current experimental features
 
-* [Support for Docker plugins](plugins.md)
-* [Volume plugins](plugins_volume.md)
+* [Network plugins](plugins_network.md)
+* [Networking and Services UI](networking.md)
+* [Native multi-host networking](network_overlay.md)
+* [Compose, Swarm and networking integration](compose_swarm_networking.md)
 
 ## How to comment on an experimental feature
 

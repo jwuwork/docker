@@ -13,7 +13,7 @@ parent = "smn_linux"
 Docker is supported on the following versions of Debian:
 
  - [*Debian 8.0 Jessie (64-bit)*](#debian-jessie-80-64-bit)
- - [*Debian 7.7 Wheezy (64-bit)*](#debian-wheezystable-7x-64-bit)
+ - [*Debian 7.7 Wheezy (64-bit)*](#debian-wheezy-stable-7-x-64-bit)
 
 ## Debian Jessie 8.0 (64-bit)
 
@@ -39,19 +39,23 @@ To verify that everything has worked as expected:
 This command downloads and runs the `hello-world` image in a container. When the
 container runs, it prints an informational message. Then, it exits.
 
+If you need to add an HTTP Proxy, set a different directory or partition for the
+Docker runtime files, or make other customizations, read our Systemd article to
+learn how to [customize your Systemd Docker daemon options](/articles/systemd/).
+
 > **Note**:
 > If you want to enable memory and swap accounting see
-> [this](/installation/ubuntulinux/#memory-and-swap-accounting).
+> [this](/installation/ubuntulinux/#adjust-memory-and-swap-accounting).
 
 ### Uninstallation
 
 To uninstall the Docker package:
 
-    $ sudo apt-get purge docker-io
+    $ sudo apt-get purge docker.io
 
 To uninstall the Docker package and dependencies that are no longer needed:
 
-    $ sudo apt-get autoremove --purge docker-io
+    $ sudo apt-get autoremove --purge docker.io
 
 The above commands will not remove images, containers, volumes, or user created
 configuration files on your host. If you wish to delete all images, containers,
@@ -96,17 +100,17 @@ which is officially supported by Docker.
 >command fails for the Docker repo during installation. To work around this,
 >add the key directly using the following:
 >
->       $ wget -qO- https://get.docker.com/gpg | sudo apt-key add -
+>       $ curl -sSL https://get.docker.com/gpg | sudo apt-key add -
 
 ### Uninstallation
 
 To uninstall the Docker package:
 
-    $ sudo apt-get purge lxc-docker
+    $ sudo apt-get purge docker-engine
 
 To uninstall the Docker package and dependencies that are no longer needed:
 
-    $ sudo apt-get autoremove --purge lxc-docker
+    $ sudo apt-get autoremove --purge docker-engine
 
 The above commands will not remove images, containers, volumes, or user created
 configuration files on your host. If you wish to delete all images, containers,

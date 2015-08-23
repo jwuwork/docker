@@ -28,7 +28,7 @@ Docker.
 
 A *data volume* is a specially-designated directory within one or more
 containers that bypasses the [*Union File
-System*](/terms/layer/#union-file-system). Data volumes provide several 
+System*](/reference/glossary#union-file-system). Data volumes provide several 
 useful features for persistent or shared data:
 
 - Volumes are initialized when a container is created. If the container's
@@ -59,6 +59,11 @@ This will create a new volume inside a container at `/webapp`.
 > You can also use the `VOLUME` instruction in a `Dockerfile` to add one or
 > more new volumes to any container created from that image.
 
+Docker volumes default to mount in read-write mode, but you can also set it to be mounted read-only.
+
+    $ docker run -d -P --name web -v /opt/webapp:ro training/webapp python app.py
+
+
 ### Locating a volume
 
 You can locate the volume on the host by utilizing the 'docker inspect' command.
@@ -69,29 +74,34 @@ The output will provide details on the container configurations including the
 volumes. The output should look something similar to the following:
 
     ...
-    "Volumes": {
-        "/webapp": "/var/lib/docker/volumes/fac362...80535"
-    },
-    "VolumesRW": {
-        "/webapp": true
-    }
+    Mounts": [
+        {
+            "Name": "fac362...80535",
+            "Source": "/var/lib/docker/volumes/fac362...80535/_data",
+            "Destination": "/webapp",
+            "Driver": "local",
+            "Mode": "",
+            "RW": true
+        }
+    ]
     ...
 
-You will notice in the above 'Volumes' is specifying the location on the host and 
-'VolumesRW' is specifying that the volume is read/write.
+You will notice in the above 'Source' is specifying the location on the host and 
+'Destination' is specifying the volume location inside the container. `RW` shows
+if the volume is read/write.
 
 ### Mount a host directory as a data volume
 
 In addition to creating a volume using the `-v` flag you can also mount a
 directory from your Docker daemon's host into a container.
 
-> **Note:**
-> If you are using Boot2Docker, your Docker daemon only has limited access to
-> your OS X/Windows filesystem. Boot2Docker tries to auto-share your `/Users`
-> (OS X) or `C:\Users` (Windows) directory - and so you can mount files or directories
-> using `docker run -v /Users/<path>:/<container path> ...` (OS X) or
-> `docker run -v /c/Users/<path>:/<container path ...` (Windows). All other paths
-> come from the Boot2Docker virtual machine's filesystem.
+>**Note**: If you are using Docker Machine on Mac or Windows, your Docker daemon
+>only has limited access to your OS X/Windows filesystem. Docker Machine tries
+>to auto-share your `/Users` (OS X) or `C:\Users` (Windows) directory - and so
+>you can mount files or directories using `docker run -v
+>/Users/<path>:/<container path> ...` (OS X) or `docker run -v
+>/c/Users/<path>:/<container path ...` (Windows). All other paths come from your
+>virtual machine's filesystem.
 
     $ docker run -d -P --name web -v /src/webapp:/opt/webapp training/webapp python app.py
 
@@ -102,6 +112,10 @@ This will mount the host directory, `/src/webapp`, into the container at
 > If the path `/opt/webapp` already exists inside the container's image, its
 > contents will be replaced by the contents of `/src/webapp` on the host to stay
 > consistent with the expected behavior of `mount`
+>
+> When using Boot2Docker on Windows through git bash, there might be an issue with the 
+> way the source directory name is parsed. You can fix it by using a double slash at
+> the beginning of the source directory name as explained in [issue #12751](https://github.com/docker/docker/issues/12751)
 
 This is very useful for testing, for example we can
 mount our source code inside the container and see our application at work as
@@ -115,8 +129,7 @@ create it for you.
 > host-dependent, so a host directory specified in a `Dockerfile` probably
 > wouldn't work on all hosts.
 
-Docker defaults to a read-write volume but we can also mount a directory
-read-only.
+Docker volumes default to mount in read-write mode, but you can also set it to be mounted read-only.
 
     $ docker run -d -P --name web -v /src/webapp:/opt/webapp:ro training/webapp python app.py
 
@@ -187,7 +200,7 @@ allows you to upgrade, or effectively migrate data volumes between containers.
 > volumes that are no longer referenced by a container.
 > Dangling volumes are difficult to get rid of and can take up a large amount
 > of disk space. We're working on improving volume management and you can check
-> progress on this in [pull request #8484](https://github.com/docker/docker/pull/8484)
+> progress on this in [pull request #14214](https://github.com/docker/docker/pull/14214)
 
 ## Backup, restore, or migrate data volumes
 

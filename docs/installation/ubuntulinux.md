@@ -12,16 +12,16 @@ parent = "smn_linux"
 
 Docker is supported on these Ubuntu operating systems:
 
-- Ubuntu Trusty 14.04 (LTS) 
-- Ubuntu Precise 12.04 (LTS) 
-- Ubuntu Saucy 13.10
+- Ubuntu Vivid 15.04
+- Ubuntu Trusty 14.04 (LTS)
+- Ubuntu Precise 12.04 (LTS)
 
 This page instructs you to install using Docker-managed release packages and
 installation mechanisms. Using these packages ensures you get the latest release
 of Docker. If you wish to install using Ubuntu-managed packages, consult your
 Ubuntu documentation.
 
-##Prerequisites
+## Prerequisites
 
 Docker requires a 64-bit installation regardless of your Ubuntu version.
 Additionally, your kernel must be 3.10 at minimum. The latest 3.10 minor version
@@ -34,18 +34,23 @@ and frequently panic under certain conditions.
 To check your current kernel version, open a terminal and use `uname -r` to display
 your kernel version:
 
-    $ uname -r 
+    $ uname -r
     3.11.0-15-generic
 
 >**Caution** Some Ubuntu OS versions **require a version higher than 3.10** to
 >run Docker, see the prerequisites on this page that apply to your Ubuntu
 >version.
 
-###For Trusty 14.04
+
+### For Vivid 15.04
 
 There are no prerequisites for this version.
 
-###For Precise 12.04 (LTS)
+### For Trusty 14.04
+
+There are no prerequisites for this version.
+
+### For Precise 12.04 (LTS)
 
 For Ubuntu Precise, Docker requires the 3.13 kernel version. If your kernel
 version is older than 3.13, you must upgrade it. Refer to this table to see
@@ -90,42 +95,37 @@ To upgrade your kernel and install the additional packages, do the following:
 
         $ sudo reboot
 
-5. After your system reboots, go ahead and [install Docker](#installing-docker-on-ubuntu).
+5. After your system reboots, go ahead and [install Docker](#installation).
 
-
-###For Saucy 13.10 (64 bit)
-
-Docker uses AUFS as the default storage backend. If you don't have this
-prerequisite installed, Docker's installation process adds it.
-
-##Installation
+## Installation
 
 Make sure you have installed the prerequisites for your Ubuntu version. Then,
 install Docker using the following:
 
 1. Log into your Ubuntu installation as a user with `sudo` privileges.
 
-2. Verify that you have `wget` installed.
+2. Verify that you have `curl` installed.
 
-        $ which wget
+        $ which curl
 
-    If `wget` isn't installed, install it after updating your manager:
+    If `curl` isn't installed, install it after updating your manager:
 
         $ sudo apt-get update
-        $ sudo apt-get install wget
+        $ sudo apt-get install curl
 
 3. Get the latest Docker package.
 
-        $ wget -qO- https://get.docker.com/ | sh
+        $ curl -sSL https://get.docker.com/ | sh
 
     The system prompts you for your `sudo` password. Then, it downloads and
     installs Docker and its dependencies.
->**Note**: If your company is behind a filtering proxy, you may find that the
->`apt-key`
->command fails for the Docker repo during installation. To work around this,
->add the key directly using the following:
->
->       $ wget -qO- https://get.docker.com/gpg | sudo apt-key add -
+
+    >**Note**: If your company is behind a filtering proxy, you may find that the
+    >`apt-key`
+    >command fails for the Docker repo during installation. To work around this,
+    >add the key directly using the following:
+    >
+    >       $ curl -sSL https://get.docker.com/gpg | sudo apt-key add -
 
 4. Verify `docker` is installed correctly.
 
@@ -142,6 +142,7 @@ better with Docker.
 * [Adjust memory and swap accounting](#adjust-memory-and-swap-accounting) 
 * [Enable UFW forwarding](#enable-ufw-forwarding) 
 * [Configure a DNS server for use by Docker](#configure-a-dns-server-for-docker)
+* [Configure Docker to start on boot](#configure-docker-to-start-on-boot)
 
 ### Create a Docker group		
 
@@ -175,6 +176,12 @@ To create the `docker` group and add your user:
 
         $ docker run hello-world
 
+	If this fails with a message similar to this:
+
+		Cannot connect to the Docker daemon. Is 'docker daemon' running on this host?
+
+	Check that the `DOCKER_HOST` environment variable is not set for your shell.
+	If it is, unset it.
 
 ### Adjust memory and swap accounting
 
@@ -183,9 +190,14 @@ When users run Docker, they may see these messages when working with an image:
     WARNING: Your kernel does not support cgroup swap limit. WARNING: Your
     kernel does not support swap limit capabilities. Limitation discarded.
 
-To prevent these messages, enable memory and swap accounting on your system. To
-enable these on system using GNU GRUB (GNU GRand Unified Bootloader), do the
-following.
+To prevent these messages, enable memory and swap accounting on your
+system.  Enabling memory and swap accounting does induce both a memory
+overhead and a performance degradation even when Docker is not in
+use. The memory overhead is about 1% of the total available
+memory. The performance degradation is roughly 10%.
+
+To enable memory and swap on system using GNU GRUB (GNU GRand Unified
+Bootloader), do the following:
 
 1. Log into Ubuntu as a user with `sudo` privileges.
 
@@ -309,22 +321,35 @@ NetworkManager (this might slow your network).
 
         $ sudo restart network-manager $ sudo restart docker
 
+### Configure Docker to start on boot
+
+Ubuntu uses `systemd` as its boot and service manager `15.04` onwards and `upstart`
+for versions `14.10` and below.
+
+For `15.04` and up, to configure the `docker` daemon to start on boot, run
+
+    $ sudo systemctl enable docker
+
+&nbsp;
+
+For `14.10` and below the above installation method automatically configures `upstart`
+to start the docker daemon on boot
 
 ## Upgrade Docker
 
-To install the latest version of Docker with `wget`:
+To install the latest version of Docker with `curl`:
 
-    $ wget -qO- https://get.docker.com/ | sh
+    $ curl -sSL https://get.docker.com/ | sh
 
 ## Uninstallation
 
 To uninstall the Docker package:
 
-    $ sudo apt-get purge lxc-docker
+    $ sudo apt-get purge docker-engine
 
 To uninstall the Docker package and dependencies that are no longer needed:
 
-    $ sudo apt-get autoremove --purge lxc-docker
+    $ sudo apt-get autoremove --purge docker-engine
 
 The above commands will not remove images, containers, volumes, or user created
 configuration files on your host. If you wish to delete all images, containers,

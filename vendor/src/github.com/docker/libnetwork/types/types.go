@@ -24,11 +24,12 @@ func (t *TransportPort) GetCopy() TransportPort {
 
 // PortBinding represent a port binding between the container and the host
 type PortBinding struct {
-	Proto    Protocol
-	IP       net.IP
-	Port     uint16
-	HostIP   net.IP
-	HostPort uint16
+	Proto       Protocol
+	IP          net.IP
+	Port        uint16
+	HostIP      net.IP
+	HostPort    uint16
+	HostPortEnd uint16
 }
 
 // HostAddr returns the host side transport address
@@ -58,11 +59,12 @@ func (p PortBinding) ContainerAddr() (net.Addr, error) {
 // GetCopy returns a copy of this PortBinding structure instance
 func (p *PortBinding) GetCopy() PortBinding {
 	return PortBinding{
-		Proto:    p.Proto,
-		IP:       GetIPCopy(p.IP),
-		Port:     p.Port,
-		HostIP:   GetIPCopy(p.HostIP),
-		HostPort: p.HostPort,
+		Proto:       p.Proto,
+		IP:          GetIPCopy(p.IP),
+		Port:        p.Port,
+		HostIP:      GetIPCopy(p.HostIP),
+		HostPort:    p.HostPort,
+		HostPortEnd: p.HostPortEnd,
 	}
 }
 
@@ -76,7 +78,8 @@ func (p *PortBinding) Equal(o *PortBinding) bool {
 		return false
 	}
 
-	if p.Proto != o.Proto || p.Port != o.Port || p.HostPort != o.HostPort {
+	if p.Proto != o.Proto || p.Port != o.Port ||
+		p.HostPort != o.HostPort || p.HostPortEnd != o.HostPortEnd {
 		return false
 	}
 
@@ -173,6 +176,16 @@ func GetIPNetCopy(from *net.IPNet) *net.IPNet {
 	return &net.IPNet{IP: GetIPCopy(from.IP), Mask: bm}
 }
 
+// GetIPNetCanonical returns the canonical form for the passed network
+func GetIPNetCanonical(nw *net.IPNet) *net.IPNet {
+	if nw == nil {
+		return nil
+	}
+	c := GetIPNetCopy(nw)
+	c.IP = c.IP.Mask(nw.Mask)
+	return c
+}
+
 // CompareIPNet returns equal if the two IP Networks are equal
 func CompareIPNet(a, b *net.IPNet) bool {
 	if a == b {
@@ -228,6 +241,12 @@ type MaskableError interface {
 	Maskable()
 }
 
+// RetryError is an interface for errors which might get resolved through retry
+type RetryError interface {
+	// Retry makes implementer into RetryError type
+	Retry()
+}
+
 // BadRequestError is an interface for errors originated by a bad request
 type BadRequestError interface {
 	// BadRequest makes implementer into BadRequestError type
@@ -271,7 +290,7 @@ type InternalError interface {
 }
 
 /******************************
- * Weel-known Error Formatters
+ * Well-known Error Formatters
  ******************************/
 
 // BadRequestErrorf creates an instance of BadRequestError
@@ -312,6 +331,11 @@ func InternalErrorf(format string, params ...interface{}) error {
 // InternalMaskableErrorf creates an instance of InternalError and MaskableError
 func InternalMaskableErrorf(format string, params ...interface{}) error {
 	return maskInternal(fmt.Sprintf(format, params...))
+}
+
+// RetryErrorf creates an instance of RetryError
+func RetryErrorf(format string, params ...interface{}) error {
+	return retry(fmt.Sprintf(format, params...))
 }
 
 /***********************
@@ -377,3 +401,10 @@ func (mnt maskInternal) Error() string {
 }
 func (mnt maskInternal) Internal() {}
 func (mnt maskInternal) Maskable() {}
+
+type retry string
+
+func (r retry) Error() string {
+	return string(r)
+}
+func (r retry) Retry() {}

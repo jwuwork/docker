@@ -1,4 +1,3 @@
-// +build experimental
 // +build !windows
 
 package main
@@ -41,7 +40,6 @@ type DockerExternalVolumeSuite struct {
 func (s *DockerExternalVolumeSuite) SetUpTest(c *check.C) {
 	s.d = NewDaemon(c)
 	s.ec = &eventCounter{}
-
 }
 
 func (s *DockerExternalVolumeSuite) TearDownTest(c *check.C) {
@@ -130,11 +128,11 @@ func (s *DockerExternalVolumeSuite) SetUpSuite(c *check.C) {
 		fmt.Fprintln(w, `{}`)
 	})
 
-	if err := os.MkdirAll("/usr/share/docker/plugins", 0755); err != nil {
+	if err := os.MkdirAll("/etc/docker/plugins", 0755); err != nil {
 		c.Fatal(err)
 	}
 
-	if err := ioutil.WriteFile("/usr/share/docker/plugins/test-external-volume-driver.spec", []byte(s.server.URL), 0644); err != nil {
+	if err := ioutil.WriteFile("/etc/docker/plugins/test-external-volume-driver.spec", []byte(s.server.URL), 0644); err != nil {
 		c.Fatal(err)
 	}
 }
@@ -142,7 +140,7 @@ func (s *DockerExternalVolumeSuite) SetUpSuite(c *check.C) {
 func (s *DockerExternalVolumeSuite) TearDownSuite(c *check.C) {
 	s.server.Close()
 
-	if err := os.RemoveAll("/usr/share/docker/plugins"); err != nil {
+	if err := os.RemoveAll("/etc/docker/plugins"); err != nil {
 		c.Fatal(err)
 	}
 }
@@ -245,4 +243,39 @@ func (s DockerExternalVolumeSuite) TestStartExternalVolumeDriverDeleteContainer(
 
 func hostVolumePath(name string) string {
 	return fmt.Sprintf("/var/lib/docker/volumes/%s", name)
+}
+
+func (s *DockerExternalVolumeSuite) TestStartExternalNamedVolumeDriverCheckBindLocalVolume(c *check.C) {
+	if err := s.d.StartWithBusybox(); err != nil {
+		c.Fatal(err)
+	}
+
+	expected := s.server.URL
+
+	dockerfile := fmt.Sprintf(`FROM busybox:latest
+	RUN mkdir /nobindthenlocalvol
+	RUN echo %s > /nobindthenlocalvol/test
+	VOLUME ["/nobindthenlocalvol"]`, expected)
+
+	img := "test-checkbindlocalvolume"
+
+	args := []string{"--host", s.d.sock()}
+	buildOut, err := buildImageArgs(args, img, dockerfile, true)
+	fmt.Println(buildOut)
+
+	out, err := s.d.Cmd("run", "--rm", "--name", "test-data-nobind", "-v", "external-volume-test:/tmp/external-volume-test", "--volume-driver", "test-external-volume-driver", img, "cat", "/nobindthenlocalvol/test")
+	if err != nil {
+		fmt.Println(out)
+		c.Fatal(err)
+	}
+
+	if !strings.Contains(out, expected) {
+		c.Fatalf("External volume mount failed. Output: %s\n", out)
+	}
+
+	c.Assert(s.ec.activations, check.Equals, 1)
+	c.Assert(s.ec.creations, check.Equals, 1)
+	c.Assert(s.ec.removals, check.Equals, 1)
+	c.Assert(s.ec.mounts, check.Equals, 1)
+	c.Assert(s.ec.unmounts, check.Equals, 1)
 }

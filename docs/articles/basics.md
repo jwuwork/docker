@@ -8,7 +8,7 @@ parent = "smn_containers"
 +++
 <![end-metadata]-->
 
-# "Get started with containers
+# Get started with containers
 
 This guide assumes you have a working installation of Docker. To verify Docker is 
 installed, use the following command:
@@ -47,10 +47,6 @@ image cache.
 > characters of the full image ID - which can be found using
 > `docker inspect` or `docker images --no-trunc=true`.
 
-> **Note:** if you are using a remote Docker daemon, such as Boot2Docker, 
-> then _do not_ type the `sudo` before the `docker` commands shown in the
-> documentation's examples.
-
 ## Running an interactive shell
 
 To run an interactive shell in the Ubuntu image:
@@ -83,12 +79,14 @@ Similarly, the Docker client can use `-H` to connect to a custom port.
 
 `-H` accepts host and port assignment in the following format:
 
-    tcp://[host][:port] or unix://path
+    tcp://[host][:port][path] or unix://path
 
 For example:
 
 -   `tcp://host:2375` -> TCP connection on
     host:2375
+-   `tcp://host:2375/path` -> TCP connection on
+    host:2375 and prepend path to all requests
 -   `unix://path/to/socket` -> Unix socket located
     at `path/to/socket`
 
@@ -101,7 +99,7 @@ when no `-H` was passed in.
 
 Run Docker in daemon mode:
 
-    $ sudo <path to>/docker -H 0.0.0.0:5555 -d &
+    $ sudo <path to>/docker daemon -H 0.0.0.0:5555 &
 
 Download an `ubuntu` image:
 
@@ -111,7 +109,7 @@ You can use multiple `-H`, for example, if you want to listen on both
 TCP and a Unix socket
 
     # Run docker in daemon mode
-    $ sudo <path to>/docker -H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -d &
+    $ sudo <path to>/docker daemon -H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock &
     # Download an ubuntu image, use default Unix socket
     $ docker pull ubuntu
     # OR use the TCP port

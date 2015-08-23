@@ -2,24 +2,22 @@ package daemon
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/docker/docker/graph"
+	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/graph/tags"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/parsers"
-	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/runconfig"
-	"github.com/docker/libcontainer/label"
+	"github.com/opencontainers/runc/libcontainer/label"
 )
 
-func (daemon *Daemon) ContainerCreate(name string, config *runconfig.Config, hostConfig *runconfig.HostConfig) (string, []string, error) {
+func (daemon *Daemon) ContainerCreate(name string, config *runconfig.Config, hostConfig *runconfig.HostConfig, adjustCPUShares bool) (string, []string, error) {
 	if config == nil {
 		return "", nil, fmt.Errorf("Config cannot be empty in order to create a container")
 	}
 
 	warnings, err := daemon.verifyContainerSettings(hostConfig, config)
+	daemon.adaptContainerSettings(hostConfig, adjustCPUShares)
 	if err != nil {
 		return "", warnings, err
 	}
@@ -29,7 +27,7 @@ func (daemon *Daemon) ContainerCreate(name string, config *runconfig.Config, hos
 		if daemon.Graph().IsNotExist(err, config.Image) {
 			_, tag := parsers.ParseRepositoryTag(config.Image)
 			if tag == "" {
-				tag = graph.DEFAULTTAG
+				tag = tags.DefaultTag
 			}
 			return "", warnings, fmt.Errorf("No such image: %s (tag: %s)", config.Image, tag)
 		}
@@ -42,7 +40,7 @@ func (daemon *Daemon) ContainerCreate(name string, config *runconfig.Config, hos
 }
 
 // Create creates a new container from the given configuration with a given name.
-func (daemon *Daemon) Create(config *runconfig.Config, hostConfig *runconfig.HostConfig, name string) (*Container, []string, error) {
+func (daemon *Daemon) Create(config *runconfig.Config, hostConfig *runconfig.HostConfig, name string) (retC *Container, retS []string, retErr error) {
 	var (
 		container *Container
 		warnings  []string
@@ -65,9 +63,7 @@ func (daemon *Daemon) Create(config *runconfig.Config, hostConfig *runconfig.Hos
 	if err := daemon.mergeAndVerifyConfig(config, img); err != nil {
 		return nil, nil, err
 	}
-	if !config.NetworkDisabled && daemon.SystemConfig().IPv4ForwardingDisabled {
-		warnings = append(warnings, "IPv4 forwarding is disabled.")
-	}
+
 	if hostConfig == nil {
 		hostConfig = &runconfig.HostConfig{}
 	}
@@ -80,6 +76,14 @@ func (daemon *Daemon) Create(config *runconfig.Config, hostConfig *runconfig.Hos
 	if container, err = daemon.newContainer(name, config, imgID); err != nil {
 		return nil, nil, err
 	}
+	defer func() {
+		if retErr != nil {
+			if err := daemon.rm(container, false); err != nil {
+				logrus.Errorf("Clean up Error! Cannot destroy container %s: %v", container.ID, err)
+			}
+		}
+	}()
+
 	if err := daemon.Register(container); err != nil {
 		return nil, nil, err
 	}
@@ -94,48 +98,12 @@ func (daemon *Daemon) Create(config *runconfig.Config, hostConfig *runconfig.Hos
 	}
 	defer container.Unmount()
 
-	for spec := range config.Volumes {
-		var (
-			name, destination string
-			parts             = strings.Split(spec, ":")
-		)
-		switch len(parts) {
-		case 2:
-			name, destination = parts[0], filepath.Clean(parts[1])
-		default:
-			name = stringid.GenerateRandomID()
-			destination = filepath.Clean(parts[0])
-		}
-		// Skip volumes for which we already have something mounted on that
-		// destination because of a --volume-from.
-		if container.isDestinationMounted(destination) {
-			continue
-		}
-		path, err := container.GetResourcePath(destination)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		stat, err := os.Stat(path)
-		if err == nil && !stat.IsDir() {
-			return nil, nil, fmt.Errorf("cannot mount volume over existing file, file exists %s", path)
-		}
-
-		v, err := createVolume(name, config.VolumeDriver)
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := label.Relabel(v.Path(), container.MountLabel, "z"); err != nil {
-			return nil, nil, err
-		}
-
-		if err := container.copyImagePathContent(v, destination); err != nil {
-			return nil, nil, err
-		}
-
-		container.addMountPointWithVolume(destination, v, true)
+	if err := createContainerPlatformSpecificSettings(container, config, img); err != nil {
+		return nil, nil, err
 	}
+
 	if err := container.ToDisk(); err != nil {
+		logrus.Errorf("Error saving new container to disk: %v", err)
 		return nil, nil, err
 	}
 	container.LogEvent("create")

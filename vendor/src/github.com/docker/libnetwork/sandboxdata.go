@@ -2,6 +2,7 @@ package libnetwork
 
 import (
 	"container/heap"
+	"fmt"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
@@ -48,13 +49,9 @@ func (eh *epHeap) Pop() interface{} {
 
 func (s *sandboxData) updateGateway(ep *endpoint) error {
 	sb := s.sandbox()
-	if err := sb.UnsetGateway(); err != nil {
-		return err
-	}
 
-	if err := sb.UnsetGatewayIPv6(); err != nil {
-		return err
-	}
+	sb.UnsetGateway()
+	sb.UnsetGatewayIPv6()
 
 	if ep == nil {
 		return nil
@@ -65,11 +62,11 @@ func (s *sandboxData) updateGateway(ep *endpoint) error {
 	ep.Unlock()
 
 	if err := sb.SetGateway(joinInfo.gw); err != nil {
-		return err
+		return fmt.Errorf("failed to set gateway while updating gateway: %v", err)
 	}
 
 	if err := sb.SetGatewayIPv6(joinInfo.gw6); err != nil {
-		return err
+		return fmt.Errorf("failed to set IPv6 gateway while updating gateway: %v", err)
 	}
 
 	return nil
@@ -93,7 +90,7 @@ func (s *sandboxData) addEndpoint(ep *endpoint) error {
 		}
 
 		if err := sb.AddInterface(i.srcName, i.dstPrefix, ifaceOptions...); err != nil {
-			return err
+			return fmt.Errorf("failed to add interface %s to sandbox: %v", i.srcName, err)
 		}
 	}
 
@@ -101,7 +98,7 @@ func (s *sandboxData) addEndpoint(ep *endpoint) error {
 		// Set up non-interface routes.
 		for _, r := range ep.joinInfo.StaticRoutes {
 			if err := sb.AddStaticRoute(r); err != nil {
-				return err
+				return fmt.Errorf("failed to add static route %s: %v", r.Destination.String(), err)
 			}
 		}
 	}
@@ -117,14 +114,10 @@ func (s *sandboxData) addEndpoint(ep *endpoint) error {
 		}
 	}
 
-	s.Lock()
-	s.refCnt++
-	s.Unlock()
-
 	return nil
 }
 
-func (s *sandboxData) rmEndpoint(ep *endpoint) int {
+func (s *sandboxData) rmEndpoint(ep *endpoint) {
 	ep.Lock()
 	joinInfo := ep.joinInfo
 	ep.Unlock()
@@ -146,10 +139,15 @@ func (s *sandboxData) rmEndpoint(ep *endpoint) int {
 		}
 	}
 
-	// We don't check if s.endpoints is empty here because
-	// it should never be empty during a rmEndpoint call and
-	// if it is we will rightfully panic here
 	s.Lock()
+	if len(s.endpoints) == 0 {
+		// s.endpoints should never be empty and this is unexpected error condition
+		// We log an error message to note this down for debugging purposes.
+		logrus.Errorf("No endpoints in sandbox while trying to remove endpoint %s", ep.Name())
+		s.Unlock()
+		return
+	}
+
 	highEpBefore := s.endpoints[0]
 	var (
 		i int
@@ -171,17 +169,6 @@ func (s *sandboxData) rmEndpoint(ep *endpoint) int {
 	if highEpBefore != highEpAfter {
 		s.updateGateway(highEpAfter)
 	}
-
-	s.Lock()
-	s.refCnt--
-	refCnt := s.refCnt
-	s.Unlock()
-
-	if refCnt == 0 {
-		s.sandbox().Destroy()
-	}
-
-	return refCnt
 }
 
 func (s *sandboxData) sandbox() sandbox.Sandbox {
@@ -199,7 +186,7 @@ func (c *controller) sandboxAdd(key string, create bool, ep *endpoint) (sandbox.
 	if !ok {
 		sb, err := sandbox.NewSandbox(key, create)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create new sandbox: %v", err)
 		}
 
 		sData = &sandboxData{
@@ -225,11 +212,7 @@ func (c *controller) sandboxRm(key string, ep *endpoint) {
 	sData := c.sandboxes[key]
 	c.Unlock()
 
-	if sData.rmEndpoint(ep) == 0 {
-		c.Lock()
-		delete(c.sandboxes, key)
-		c.Unlock()
-	}
+	sData.rmEndpoint(ep)
 }
 
 func (c *controller) sandboxGet(key string) sandbox.Sandbox {
@@ -242,4 +225,35 @@ func (c *controller) sandboxGet(key string) sandbox.Sandbox {
 	}
 
 	return sData.sandbox()
+}
+
+func (c *controller) LeaveAll(id string) error {
+	c.Lock()
+	sData, ok := c.sandboxes[sandbox.GenerateKey(id)]
+	c.Unlock()
+
+	if !ok {
+		return fmt.Errorf("could not find sandbox for container id %s", id)
+	}
+
+	sData.Lock()
+	eps := make([]*endpoint, len(sData.endpoints))
+	for i, ep := range sData.endpoints {
+		eps[i] = ep
+	}
+	sData.Unlock()
+
+	for _, ep := range eps {
+		if err := ep.Leave(id); err != nil {
+			logrus.Warnf("Failed leaving endpoint id %s: %v\n", ep.ID(), err)
+		}
+	}
+
+	sData.sandbox().Destroy()
+
+	c.Lock()
+	delete(c.sandboxes, sandbox.GenerateKey(id))
+	c.Unlock()
+
+	return nil
 }

@@ -3,6 +3,7 @@ package broadcastwriter
 import (
 	"bytes"
 	"errors"
+	"strings"
 
 	"testing"
 )
@@ -32,9 +33,9 @@ func TestBroadcastWriter(t *testing.T) {
 
 	// Test 1: Both bufferA and bufferB should contain "foo"
 	bufferA := &dummyWriter{}
-	writer.AddWriter(bufferA, "")
+	writer.AddWriter(bufferA)
 	bufferB := &dummyWriter{}
-	writer.AddWriter(bufferB, "")
+	writer.AddWriter(bufferB)
 	writer.Write([]byte("foo"))
 
 	if bufferA.String() != "foo" {
@@ -48,7 +49,7 @@ func TestBroadcastWriter(t *testing.T) {
 	// Test2: bufferA and bufferB should contain "foobar",
 	// while bufferC should only contain "bar"
 	bufferC := &dummyWriter{}
-	writer.AddWriter(bufferC, "")
+	writer.AddWriter(bufferC)
 	writer.Write([]byte("bar"))
 
 	if bufferA.String() != "foobar" {
@@ -82,6 +83,23 @@ func TestBroadcastWriter(t *testing.T) {
 		t.Errorf("Buffer contains %v", bufferC.String())
 	}
 
+	// Test4: Test eviction on multiple simultaneous failures
+	bufferB.failOnWrite = true
+	bufferC.failOnWrite = true
+	bufferD := &dummyWriter{}
+	writer.AddWriter(bufferD)
+	writer.Write([]byte("yo"))
+	writer.Write([]byte("ink"))
+	if strings.Contains(bufferB.String(), "yoink") {
+		t.Errorf("bufferB received write. contents: %q", bufferB)
+	}
+	if strings.Contains(bufferC.String(), "yoink") {
+		t.Errorf("bufferC received write. contents: %q", bufferC)
+	}
+	if g, w := bufferD.String(), "yoink"; g != w {
+		t.Errorf("bufferD = %q, want %q", g, w)
+	}
+
 	writer.Clean()
 }
 
@@ -100,7 +118,7 @@ func TestRaceBroadcastWriter(t *testing.T) {
 	writer := New()
 	c := make(chan bool)
 	go func() {
-		writer.AddWriter(devNullCloser(0), "")
+		writer.AddWriter(devNullCloser(0))
 		c <- true
 	}()
 	writer.Write([]byte("hello"))
@@ -111,9 +129,9 @@ func BenchmarkBroadcastWriter(b *testing.B) {
 	writer := New()
 	setUpWriter := func() {
 		for i := 0; i < 100; i++ {
-			writer.AddWriter(devNullCloser(0), "stdout")
-			writer.AddWriter(devNullCloser(0), "stderr")
-			writer.AddWriter(devNullCloser(0), "")
+			writer.AddWriter(devNullCloser(0))
+			writer.AddWriter(devNullCloser(0))
+			writer.AddWriter(devNullCloser(0))
 		}
 	}
 	testLine := "Line that thinks that it is log line from docker"
@@ -140,35 +158,5 @@ func BenchmarkBroadcastWriter(b *testing.B) {
 		b.StopTimer()
 		writer.Clean()
 		b.StartTimer()
-	}
-}
-
-func BenchmarkBroadcastWriterWithoutStdoutStderr(b *testing.B) {
-	writer := New()
-	setUpWriter := func() {
-		for i := 0; i < 100; i++ {
-			writer.AddWriter(devNullCloser(0), "")
-		}
-	}
-	testLine := "Line that thinks that it is log line from docker"
-	var buf bytes.Buffer
-	for i := 0; i < 100; i++ {
-		buf.Write([]byte(testLine + "\n"))
-	}
-	// line without eol
-	buf.Write([]byte(testLine))
-	testText := buf.Bytes()
-	b.SetBytes(int64(5 * len(testText)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		setUpWriter()
-
-		for j := 0; j < 5; j++ {
-			if _, err := writer.Write(testText); err != nil {
-				b.Fatal(err)
-			}
-		}
-
-		writer.Clean()
 	}
 }

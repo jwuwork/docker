@@ -11,30 +11,16 @@ import (
 
 // non-blocking wait with 0 exit code
 func (s *DockerSuite) TestWaitNonBlockedExitZero(c *check.C) {
-
-	runCmd := exec.Command(dockerBinary, "run", "-d", "busybox", "sh", "-c", "true")
-	out, _, err := runCommandWithOutput(runCmd)
-	if err != nil {
-		c.Fatal(out, err)
-	}
+	out, _ := dockerCmd(c, "run", "-d", "busybox", "sh", "-c", "true")
 	containerID := strings.TrimSpace(out)
 
-	status := "true"
-	for i := 0; status != "false"; i++ {
-		status, err = inspectField(containerID, "State.Running")
-		c.Assert(err, check.IsNil)
-
-		time.Sleep(time.Second)
-		if i >= 60 {
-			c.Fatal("Container should have stopped by now")
-		}
+	if err := waitInspect(containerID, "{{.State.Running}}", "false", 1); err != nil {
+		c.Fatal("Container should have stopped by now")
 	}
 
-	runCmd = exec.Command(dockerBinary, "wait", containerID)
-	out, _, err = runCommandWithOutput(runCmd)
-
-	if err != nil || strings.TrimSpace(out) != "0" {
-		c.Fatal("failed to set up container", out, err)
+	out, _ = dockerCmd(c, "wait", containerID)
+	if strings.TrimSpace(out) != "0" {
+		c.Fatal("failed to set up container", out)
 	}
 
 }
@@ -44,9 +30,7 @@ func (s *DockerSuite) TestWaitBlockedExitZero(c *check.C) {
 	out, _ := dockerCmd(c, "run", "-d", "busybox", "/bin/sh", "-c", "trap 'exit 0' TERM; while true; do sleep 0.01; done")
 	containerID := strings.TrimSpace(out)
 
-	if err := waitRun(containerID); err != nil {
-		c.Fatal(err)
-	}
+	c.Assert(waitRun(containerID), check.IsNil)
 
 	chWait := make(chan string)
 	go func() {
@@ -70,30 +54,16 @@ func (s *DockerSuite) TestWaitBlockedExitZero(c *check.C) {
 
 // non-blocking wait with random exit code
 func (s *DockerSuite) TestWaitNonBlockedExitRandom(c *check.C) {
-
-	runCmd := exec.Command(dockerBinary, "run", "-d", "busybox", "sh", "-c", "exit 99")
-	out, _, err := runCommandWithOutput(runCmd)
-	if err != nil {
-		c.Fatal(out, err)
-	}
+	out, _ := dockerCmd(c, "run", "-d", "busybox", "sh", "-c", "exit 99")
 	containerID := strings.TrimSpace(out)
 
-	status := "true"
-	for i := 0; status != "false"; i++ {
-		status, err = inspectField(containerID, "State.Running")
-		c.Assert(err, check.IsNil)
-
-		time.Sleep(time.Second)
-		if i >= 60 {
-			c.Fatal("Container should have stopped by now")
-		}
+	if err := waitInspect(containerID, "{{.State.Running}}", "false", 1); err != nil {
+		c.Fatal("Container should have stopped by now")
 	}
 
-	runCmd = exec.Command(dockerBinary, "wait", containerID)
-	out, _, err = runCommandWithOutput(runCmd)
-
-	if err != nil || strings.TrimSpace(out) != "99" {
-		c.Fatal("failed to set up container", out, err)
+	out, _ = dockerCmd(c, "wait", containerID)
+	if strings.TrimSpace(out) != "99" {
+		c.Fatal("failed to set up container", out)
 	}
 
 }
@@ -102,12 +72,7 @@ func (s *DockerSuite) TestWaitNonBlockedExitRandom(c *check.C) {
 func (s *DockerSuite) TestWaitBlockedExitRandom(c *check.C) {
 	out, _ := dockerCmd(c, "run", "-d", "busybox", "/bin/sh", "-c", "trap 'exit 99' TERM; while true; do sleep 0.01; done")
 	containerID := strings.TrimSpace(out)
-	if err := waitRun(containerID); err != nil {
-		c.Fatal(err)
-	}
-	if err := waitRun(containerID); err != nil {
-		c.Fatal(err)
-	}
+	c.Assert(waitRun(containerID), check.IsNil)
 
 	chWait := make(chan error)
 	waitCmd := exec.Command(dockerBinary, "wait", containerID)

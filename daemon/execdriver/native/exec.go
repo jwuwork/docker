@@ -9,13 +9,17 @@ import (
 	"syscall"
 
 	"github.com/docker/docker/daemon/execdriver"
-	"github.com/docker/libcontainer"
-	_ "github.com/docker/libcontainer/nsenter"
-	"github.com/docker/libcontainer/utils"
+	"github.com/opencontainers/runc/libcontainer"
+	// Blank import 'nsenter' so that init in that package will call c
+	// function 'nsexec()' to do 'setns' before Go runtime take over,
+	// it's used for join to exist ns like 'docker exec' command.
+	_ "github.com/opencontainers/runc/libcontainer/nsenter"
+	"github.com/opencontainers/runc/libcontainer/utils"
 )
 
-// TODO(vishh): Add support for running in privileged mode.
-func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessConfig, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (int, error) {
+// Exec implements the exec driver Driver interface,
+// it calls libcontainer APIs to execute a container.
+func (d *Driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessConfig, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (int, error) {
 	active := d.activeContainers[c.ID]
 	if active == nil {
 		return -1, fmt.Errorf("No active container exists with ID %s", c.ID)
@@ -26,6 +30,10 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 		Env:  c.ProcessConfig.Env,
 		Cwd:  c.WorkingDir,
 		User: processConfig.User,
+	}
+
+	if processConfig.Privileged {
+		p.Capabilities = execdriver.GetAllCapabilities()
 	}
 
 	config := active.Config()
